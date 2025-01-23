@@ -1,6 +1,7 @@
 #pragma once
 #include <cassert>
 #include <cstdlib>
+#include <Iterator>
 #include <memory>
 #include <new>
 #include <numeric>
@@ -13,6 +14,7 @@ public:
     explicit RawMemory(size_t capacity);
     RawMemory(const RawMemory&) = delete;
     RawMemory(RawMemory&& other) noexcept;
+
     ~RawMemory();
 
     const T* GetAddress() const noexcept;
@@ -42,43 +44,55 @@ private:
 template <typename T>
 class Vector {
 public:
-    using iterator = T*;
-    using const_iterator = const T*;
-
-    iterator begin() noexcept;
-    iterator end() noexcept;
-    const_iterator begin() const noexcept;
-    const_iterator end() const noexcept;
-    const_iterator cbegin() const noexcept;
-    const_iterator cend() const noexcept;
+    using Iterator = T*;
+    using ConstIterator = const T*;
+    using ReverseIterator = std::reverse_iterator<Iterator>;
+    using ConstReverseIterator = std::reverse_iterator<ConstIterator>;
 
     Vector() = default;
     explicit Vector(size_t size);
     Vector(const Vector& other);
     Vector(Vector&& other) noexcept;
+
     ~Vector();
 
     size_t Size() const noexcept;
     size_t Capacity() const noexcept;
     void Reserve(size_t new_capacity);
-    void Swap(Vector& other);
-    void Resize(size_t new_size);
+    void Resize(size_t new_size); 
 
     template <typename S>
     void PushBack(S&& value);
 
+    void PopBack();
+
+    template <typename S>
+    Iterator Insert(ConstIterator pos, S&& value);
+
+    Iterator Erase(ConstIterator pos);
+
+    template <typename... Args>
+    Iterator Emplace(ConstIterator pos, Args&&... args);
+
     template <typename... Args>
     T& EmplaceBack(Args&&... args);
 
-    template <typename S>
-    iterator Insert(const_iterator pos, S&& value);
+    void Swap(Vector& other);
+    T& At(size_t index);
 
-    template <typename... Args>
-    iterator Emplace(const_iterator pos, Args&&... args);
+    Iterator begin() noexcept;
+    Iterator end() noexcept;
+    ConstIterator begin() const noexcept;
+    ConstIterator end() const noexcept;
+    ConstIterator cbegin() const noexcept;
+    ConstIterator cend() const noexcept;
 
-    void PopBack();
-
-    iterator Erase(const_iterator pos);
+    ReverseIterator rbegin() noexcept;
+    ReverseIterator rend() noexcept;
+    ConstReverseIterator rbegin() const noexcept;
+    ConstReverseIterator rend() const noexcept;
+    ConstReverseIterator crbegin() const noexcept;
+    ConstReverseIterator crend() const noexcept;
 
     const T& operator[](size_t index) const noexcept;
     T& operator[](size_t index) noexcept;
@@ -185,36 +199,6 @@ RawMemory<T>& RawMemory<T>::operator=(RawMemory&& rhs) noexcept {
 // -------------------Vector-------------------
 
 template <typename T>
-typename Vector<T>::iterator Vector<T>::begin() noexcept {
-    return data_.GetAddress();
-}
-
-template <typename T>
-typename Vector<T>::iterator Vector<T>::end() noexcept {
-    return data_.GetAddress() + size_;
-}
-
-template <typename T>
-typename Vector<T>::const_iterator Vector<T>::begin() const noexcept {
-    return cbegin();
-}
-
-template <typename T>
-typename Vector<T>::const_iterator Vector<T>::end() const noexcept {
-    return cend();
-}
-
-template <typename T>
-typename Vector<T>::const_iterator Vector<T>::cbegin() const noexcept {
-    return data_.GetAddress();
-}
-
-template <typename T>
-typename Vector<T>::const_iterator Vector<T>::cend() const noexcept {
-    return data_.GetAddress() + size_;
-}
-
-template <typename T>
 Vector<T>::Vector(size_t size)
     : data_(size)
     , size_(size)
@@ -291,12 +275,6 @@ void Vector<T>::Reserve(size_t new_capacity) {
 }
 
 template <typename T>
-void Vector<T>::Swap(Vector& other) {
-    data_.Swap(other.data_);
-    std::swap(size_, other.size_);
-}
-
-template <typename T>
 void Vector<T>::Resize(size_t new_size) {
     if (new_size < size_) {
         DestroyN(data_.GetAddress() + new_size, size_ - new_size);
@@ -316,60 +294,19 @@ void Vector<T>::PushBack(S&& value) {
 }
 
 template <typename T>
-template <typename... Args>
-T& Vector<T>::EmplaceBack(Args&&... args) {    
-    return *(Emplace(cend(), std::forward<Args&&>(args)...));
-}
-
-template <typename T>
-template <typename S>
-typename Vector<T>::iterator Vector<T>::Insert(const_iterator pos, S&& value) {
-    return Emplace(pos, std::forward<S&&>(value));
-}
-
-template <typename T>
-template <typename... Args>
-typename Vector<T>::iterator Vector<T>::Emplace(const_iterator pos, Args&&... args) {
-    assert(pos >= begin() && pos <= end());
-
-    size_t p_distance = pos - begin();
-
-        if (size_ < Capacity()) {
-            if (pos == end()) {
-                new (end()) T(std::forward<Args>(args)...);
-            } else {
-                T temp(std::forward<Args>(args)...);
-                new (end()) T(std::forward<T>(data_[size_ - 1]));
-                std::move_backward(begin() + p_distance, end() - 1, end());
-                data_[p_distance] = std::move(temp);
-            }
-        } else {
-            size_t new_capacity = (Capacity() == 0 ? 1 : Capacity() * 2);
-            RawMemory<T> new_data(new_capacity);
-            new (new_data.GetAddress() + p_distance) T(std::forward<Args>(args)...);
-            MoveOrCopyData(data_.GetAddress(), p_distance, new_data.GetAddress());
-
-            if (pos != end()) {
-                MoveOrCopyData(data_.GetAddress() + p_distance, size_ - p_distance, new_data.GetAddress() + p_distance + 1);
-            }
-
-            std::destroy_n(data_.GetAddress(), size_);
-            data_.Swap(new_data);
-        }
-
-    ++size_;
-
-    return &data_[p_distance];
-}
-
-template <typename T>
 void Vector<T>::PopBack() {
     Destroy(data_.GetAddress() + size_ - 1);
     --size_;
 }
 
 template <typename T>
-typename Vector<T>::iterator Vector<T>::Erase(const_iterator pos) {
+template <typename S>
+typename Vector<T>::Iterator Vector<T>::Insert(ConstIterator pos, S&& value) {
+    return Emplace(pos, std::forward<S&&>(value));
+}
+
+template <typename T>
+typename Vector<T>::Iterator Vector<T>::Erase(ConstIterator pos) {
     assert(pos >= begin() && pos <= end());
     auto p_distance = pos - begin();
     std::move(begin() + p_distance + 1, end(), begin() + p_distance);
@@ -378,20 +315,124 @@ typename Vector<T>::iterator Vector<T>::Erase(const_iterator pos) {
 }
 
 template <typename T>
-void Vector<T>::DestroyN(T* buf, size_t n) noexcept {
-    for (size_t i = 0; i != n; ++i) {
-        Destroy(buf + i);
+template <typename... Args>
+typename Vector<T>::Iterator Vector<T>::Emplace(ConstIterator pos, Args&&... args) {
+    assert(pos >= begin() && pos <= end());
+
+    size_t p_distance = pos - begin();
+
+    if (size_ < Capacity()) {
+        if (pos == end()) {
+            new (end()) T(std::forward<Args>(args)...);
+        }
+        else {
+            T temp(std::forward<Args>(args)...);
+            new (end()) T(std::forward<T>(data_[size_ - 1]));
+            std::move_backward(begin() + p_distance, end() - 1, end());
+            data_[p_distance] = std::move(temp);
+        }
     }
+    else {
+        size_t new_capacity = (Capacity() == 0 ? 1 : Capacity() * 2);
+        RawMemory<T> new_data(new_capacity);
+        new (new_data.GetAddress() + p_distance) T(std::forward<Args>(args)...);
+        MoveOrCopyData(data_.GetAddress(), p_distance, new_data.GetAddress());
+
+        if (pos != end()) {
+            MoveOrCopyData(data_.GetAddress() + p_distance, size_ - p_distance, new_data.GetAddress() + p_distance + 1);
+        }
+
+        std::destroy_n(data_.GetAddress(), size_);
+        data_.Swap(new_data);
+    }
+
+    ++size_;
+
+    return &data_[p_distance];
 }
 
 template <typename T>
-void Vector<T>::CopyConstruct(T* buf, const T& elem) {
-    new (buf) T(elem);
+template <typename... Args>
+T& Vector<T>::EmplaceBack(Args&&... args) {
+    return *(Emplace(cend(), std::forward<Args&&>(args)...));
 }
 
 template <typename T>
-void Vector<T>::Destroy(T* buf) noexcept {
-    buf->~T();
+void Vector<T>::Swap(Vector& other) {
+    data_.Swap(other.data_);
+    std::swap(size_, other.size_);
+}
+
+template<typename T>
+ T& Vector<T>::At(size_t index) {
+    if (!(index < size_))
+        throw std::out_of_range("The index value is out of range");
+    return data_[index];
+}
+
+template <typename T>
+typename Vector<T>::Iterator Vector<T>::begin() noexcept {
+    return data_.GetAddress();
+}
+
+template <typename T>
+typename Vector<T>::Iterator Vector<T>::end() noexcept {
+    return data_.GetAddress() + size_;
+}
+
+template <typename T>
+typename Vector<T>::ConstIterator Vector<T>::begin() const noexcept {
+    return cbegin();
+}
+
+template <typename T>
+typename Vector<T>::ConstIterator Vector<T>::end() const noexcept {
+    return cend();
+}
+
+template <typename T>
+typename Vector<T>::ConstIterator Vector<T>::cbegin() const noexcept {
+    return data_.GetAddress();
+}
+
+template <typename T>
+typename Vector<T>::ConstIterator Vector<T>::cend() const noexcept {
+    return data_.GetAddress() + size_;
+}
+
+template <typename T>
+typename Vector<T>::ReverseIterator Vector<T>::rbegin() noexcept {
+    return Vector<T>::ReverseIterator(end());
+}
+
+template <typename T>
+typename Vector<T>::ReverseIterator Vector<T>::rend() noexcept
+{
+    return Vector<T>::ReverseIterator(begin());
+}
+
+template <typename T>
+typename Vector<T>::ConstReverseIterator Vector<T>::rbegin() const noexcept
+{
+    return crbegin();
+}
+
+template <typename T>
+typename Vector<T>::ConstReverseIterator Vector<T>::rend() const noexcept
+{
+    return crend();
+}
+
+template <typename T>
+typename Vector<T>::ConstReverseIterator Vector<T>::crbegin() const noexcept
+{
+    return Vector<T>::ConstReverseIterator(end());
+}
+
+template <typename T>
+typename Vector<T>::ConstReverseIterator Vector<T>::crend() const noexcept
+{
+    return Vector<T>::ConstReverseIterator(begin());
 }
 
 template <typename T>
@@ -429,4 +470,21 @@ Vector<T>& Vector<T>::operator=(Vector&& rhs) noexcept {
     }
 
     return *this;
+}
+
+template <typename T>
+void Vector<T>::DestroyN(T* buf, size_t n) noexcept {
+    for (size_t i = 0; i != n; ++i) {
+        Destroy(buf + i);
+    }
+}
+
+template <typename T>
+void Vector<T>::CopyConstruct(T* buf, const T& elem) {
+    new (buf) T(elem);
+}
+
+template <typename T>
+void Vector<T>::Destroy(T* buf) noexcept {
+    buf->~T();
 }

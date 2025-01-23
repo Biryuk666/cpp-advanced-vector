@@ -421,7 +421,7 @@ void Test6() {
         Obj::ResetCounters();
         Vector<Obj> v{SIZE};
         Obj obj{1};
-        Vector<Obj>::iterator pos = v.Insert(v.cbegin() + 1, obj);
+        Vector<Obj>::Iterator pos = v.Insert(v.cbegin() + 1, obj);
         assert(v.Size() == SIZE + 1);
         assert(v.Capacity() == SIZE * 2);
         assert(&*pos == &v[1]);
@@ -462,7 +462,7 @@ void Test6() {
     {
         Obj::ResetCounters();
         Vector<Obj> v{SIZE};
-        Vector<Obj>::iterator pos = v.Insert(v.cbegin() + 1, Obj{1});
+        Vector<Obj>::Iterator pos = v.Insert(v.cbegin() + 1, Obj{1});
         assert(v.Size() == SIZE + 1);
         assert(v.Capacity() == SIZE * 2);
         assert(&*pos == &v[1]);
